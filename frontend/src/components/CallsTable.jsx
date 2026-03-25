@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { deleteCall } from '../hooks/useCalls';
 
 function formatDuration(sec) {
@@ -51,9 +51,8 @@ export default function CallsTable({ calls, onRefetch }) {
         </thead>
         <tbody>
           {calls.map((call) => (
-            <>
+            <Fragment key={call.id}>
               <tr
-                key={call.id}
                 className="border-t border-zinc-800 hover:bg-zinc-900/60 cursor-pointer transition-colors"
                 onClick={() => setExpanded(expanded === call.id ? null : call.id)}
               >
@@ -92,7 +91,7 @@ export default function CallsTable({ calls, onRefetch }) {
                 </td>
               </tr>
               {expanded === call.id && (
-                <tr key={`${call.id}-exp`} className="border-t border-zinc-800 bg-zinc-950">
+                <tr className="border-t border-zinc-800 bg-zinc-950">
                   <td colSpan={11} className="px-4 py-4">
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
                       {[
@@ -131,7 +130,7 @@ export default function CallsTable({ calls, onRefetch }) {
                   </td>
                 </tr>
               )}
-            </>
+            </Fragment>
           ))}
         </tbody>
       </table>

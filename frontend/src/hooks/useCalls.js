@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-// Empty string = same origin (Vercel production). Local dev uses the .env value.
 const API = import.meta.env.VITE_API_URL ?? '';
 
 export function useCalls({ search, limit = 100, offset = 0 } = {}) {
@@ -8,9 +7,11 @@ export function useCalls({ search, limit = 100, offset = 0 } = {}) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const isFirstLoad = useRef(true);
 
   const fetchCalls = useCallback(async () => {
-    setLoading(true);
+    // Only show spinner on first load or search change, not on background polls
+    if (isFirstLoad.current) setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ limit, offset });
@@ -24,12 +25,18 @@ export function useCalls({ search, limit = 100, offset = 0 } = {}) {
       setError(e.message);
     } finally {
       setLoading(false);
+      isFirstLoad.current = false;
     }
   }, [search, limit, offset]);
 
+  // Reset first-load flag when search changes so spinner shows again
+  useEffect(() => {
+    isFirstLoad.current = true;
+  }, [search]);
+
   useEffect(() => {
     fetchCalls();
-    const interval = setInterval(fetchCalls, 15000);
+    const interval = setInterval(fetchCalls, 5000);
     return () => clearInterval(interval);
   }, [fetchCalls]);
 
@@ -54,7 +61,7 @@ export function useStats() {
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 15000);
+    const interval = setInterval(fetchStats, 5000);
     return () => clearInterval(interval);
   }, [fetchStats]);
 
