@@ -1,27 +1,6 @@
 import { useState } from 'react';
 import { deleteCall } from '../hooks/useCalls';
 
-const STATUS_COLORS = {
-  completed: 'bg-green-900/50 text-green-400',
-  ANSWER: 'bg-green-900/50 text-green-400',
-  answered: 'bg-green-900/50 text-green-400',
-  missed: 'bg-red-900/50 text-red-400',
-  'NO ANSWER': 'bg-red-900/50 text-red-400',
-  failed: 'bg-red-900/50 text-red-400',
-  initiated: 'bg-blue-900/50 text-blue-400',
-  ringing: 'bg-yellow-900/50 text-yellow-400',
-  unknown: 'bg-zinc-800 text-zinc-400',
-};
-
-function StatusBadge({ status }) {
-  const cls = STATUS_COLORS[status] || 'bg-zinc-800 text-zinc-400';
-  return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>
-      {status || '—'}
-    </span>
-  );
-}
-
 function formatDuration(sec) {
   if (!sec || sec === 0) return '—';
   const m = Math.floor(sec / 60);
@@ -32,10 +11,7 @@ function formatDuration(sec) {
 function formatDate(str) {
   if (!str) return '—';
   try {
-    return new Date(str).toLocaleString('en-IN', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
+    return new Date(str).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
   } catch {
     return str;
   }
@@ -68,7 +44,7 @@ export default function CallsTable({ calls, onRefetch }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-zinc-900 text-zinc-400 text-left">
-            {['Call ID', 'Status', 'Customer', 'Agent', 'Duration', 'Direction', 'Dial Status', 'Start Time', 'Recording', 'Actions'].map(h => (
+            {['Caller', 'Called', 'Agent No.', 'Agent Name', 'Start Time', 'Answer Time', 'End Time', 'Duration', 'Agent Talk', 'Recording', 'Actions'].map(h => (
               <th key={h} className="px-4 py-3 font-medium whitespace-nowrap">{h}</th>
             ))}
           </tr>
@@ -81,26 +57,23 @@ export default function CallsTable({ calls, onRefetch }) {
                 className="border-t border-zinc-800 hover:bg-zinc-900/60 cursor-pointer transition-colors"
                 onClick={() => setExpanded(expanded === call.id ? null : call.id)}
               >
-                <td className="px-4 py-3 font-mono text-xs text-zinc-400 max-w-[140px] truncate">{call.call_id || '—'}</td>
-                <td className="px-4 py-3"><StatusBadge status={call.status} /></td>
-                <td className="px-4 py-3 text-zinc-200 font-medium">{call.customer_number || '—'}</td>
-                <td className="px-4 py-3 text-zinc-300">{call.agent_number || '—'}</td>
+                <td className="px-4 py-3 text-zinc-300 font-medium">{call.caller_number || '—'}</td>
+                <td className="px-4 py-3 text-zinc-200 font-medium">{call.called_number || '—'}</td>
+                <td className="px-4 py-3 text-zinc-400">{call.agent_number || '—'}</td>
+                <td className="px-4 py-3 text-zinc-300">{call.agent_name || '—'}</td>
+                <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">{formatDate(call.call_start_time || call.created_at)}</td>
+                <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">{formatDate(call.agent_answer_time)}</td>
+                <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">{formatDate(call.call_end_time)}</td>
                 <td className="px-4 py-3 text-zinc-300">{formatDuration(call.duration)}</td>
-                <td className="px-4 py-3 text-zinc-400 capitalize">{call.direction || '—'}</td>
+                <td className="px-4 py-3 text-zinc-300">{formatDuration(call.agent_duration)}</td>
                 <td className="px-4 py-3">
-                  {call.dial_status ? (
-                    <span className="text-xs bg-zinc-800 px-2 py-0.5 rounded text-zinc-300">{call.dial_status}</span>
-                  ) : '—'}
-                </td>
-                <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">{formatDate(call.start_time || call.created_at)}</td>
-                <td className="px-4 py-3">
-                  {call.recording_url ? (
+                  {call.call_recording ? (
                     <a
-                      href={call.recording_url}
+                      href={call.call_recording}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={e => e.stopPropagation()}
-                      className="text-blue-400 hover:text-blue-300 underline text-xs"
+                      className="text-blue-400 hover:text-blue-300 underline text-xs whitespace-nowrap"
                     >
                       Play
                     </a>
@@ -110,7 +83,7 @@ export default function CallsTable({ calls, onRefetch }) {
                 </td>
                 <td className="px-4 py-3">
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(call.id); }}
+                    onClick={e => { e.stopPropagation(); handleDelete(call.id); }}
                     disabled={deleting === call.id}
                     className="text-xs text-red-500 hover:text-red-400 disabled:opacity-40"
                   >
@@ -119,23 +92,21 @@ export default function CallsTable({ calls, onRefetch }) {
                 </td>
               </tr>
               {expanded === call.id && (
-                <tr key={`${call.id}-expanded`} className="border-t border-zinc-800 bg-zinc-950">
-                  <td colSpan={10} className="px-4 py-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-3">
+                <tr key={`${call.id}-exp`} className="border-t border-zinc-800 bg-zinc-950">
+                  <td colSpan={11} className="px-4 py-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-4">
                       {[
-                        ['Call ID', call.call_id],
-                        ['Status', call.status],
-                        ['Customer Number', call.customer_number],
-                        ['Agent Number', call.agent_number],
-                        ['Caller Number', call.caller_number],
-                        ['Duration', formatDuration(call.duration)],
-                        ['Direction', call.direction],
-                        ['Call Type', call.call_type],
-                        ['Dial Status', call.dial_status],
-                        ['Hangup Cause', call.hangup_cause],
-                        ['Start Time', formatDate(call.start_time)],
-                        ['End Time', formatDate(call.end_time)],
-                        ['Created At', formatDate(call.created_at)],
+                        ['Call ID',          call.call_id],
+                        ['Caller Number',     call.caller_number],
+                        ['Called Number',     call.called_number],
+                        ['Agent Number',      call.agent_number],
+                        ['Agent Name',        call.agent_name],
+                        ['Call Start Time',   formatDate(call.call_start_time)],
+                        ['Agent Answer Time', formatDate(call.agent_answer_time)],
+                        ['Call End Time',     formatDate(call.call_end_time)],
+                        ['Duration',          formatDuration(call.duration)],
+                        ['Agent Duration',    formatDuration(call.agent_duration)],
+                        ['Created At',        formatDate(call.created_at)],
                       ].map(([label, value]) => (
                         <div key={label}>
                           <p className="text-xs text-zinc-500 mb-0.5">{label}</p>
@@ -143,13 +114,15 @@ export default function CallsTable({ calls, onRefetch }) {
                         </div>
                       ))}
                     </div>
-                    {call.recording_url && (
-                      <div className="mb-3">
+
+                    {call.call_recording && (
+                      <div className="mb-4">
                         <p className="text-xs text-zinc-500 mb-1">Recording</p>
-                        <audio controls src={call.recording_url} className="w-full max-w-md" />
+                        <audio controls src={call.call_recording} className="w-full max-w-md" />
                       </div>
                     )}
-                    <details className="mt-2">
+
+                    <details>
                       <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-400">Raw Payload</summary>
                       <pre className="mt-2 text-xs bg-zinc-900 p-3 rounded overflow-x-auto text-zinc-400">
                         {call.raw_payload ? JSON.stringify(JSON.parse(call.raw_payload), null, 2) : '—'}

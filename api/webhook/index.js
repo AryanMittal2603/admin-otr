@@ -12,46 +12,46 @@ module.exports = async function handler(req, res) {
 
   console.log('[Webhook received]', JSON.stringify(payload));
 
-  // Normalize keys to lowercase for case-insensitive matching
+  // Normalize keys to lowercase
   const p = Object.fromEntries(Object.entries(payload).map(([k, v]) => [k.toLowerCase(), v]));
 
   const call = {
-    call_id: p.call_id || p.callid || p.uid || p.id || `wb_${Date.now()}`,
-    status: p.status || p.call_status || p.dial_status || 'unknown',
-    customer_number: p.customer_number || p.cust_number || p.mobile || p.customer || p.to || '',
-    agent_number: p.agent_number || p.agent || p.agentno || p.from || '',
-    caller_number: p.caller_number || p.caller || p.from || '',
-    duration: parseInt(p.duration || p.call_duration || p.callduration || 0) || 0,
-    recording_url: p.recording_url || p.recordingurl || p.recurl || p.rec_url
-                || p.recording || p.callrecording || p.call_recording
-                || p.recordingfile || p.audio_url || p.file_url || '',
-    start_time: p.start_time || p.starttime || p.call_start || p.callstart || '',
-    end_time: p.end_time || p.endtime || p.call_end || p.callend || '',
-    call_type: p.call_type || p.calltype || p.type || '',
-    dial_status: p.dial_status || p.dialstatus || p.callstatus || '',
-    hangup_cause: p.hangup_cause || p.hangup || p.hangupcause || '',
-    direction: p.direction || 'outbound',
-    raw_payload: JSON.stringify(payload),
+    call_id:           p.call_id || p.callid || p.uid || `wb_${Date.now()}`,
+    caller_number:     p.caller_number || p.callernumber || p.caller || '',
+    called_number:     p.called_number || p.callednumber || p.customer_number || p.mobile || p.to || '',
+    agent_number:      p.agent_number || p.agentnumber || p.agent || '',
+    agent_name:        p.agent_name || p.agentname || p.account || '',
+    call_start_time:   p.call_start_time || p.callstarttime || p.start_time || p.starttime || '',
+    agent_answer_time: p.agent_answer_time || p.agentanswertime || p.answer_time || '',
+    call_end_time:     p.call_end_time || p.callendtime || p.end_time || p.endtime || '',
+    duration:          parseInt(p.duration || p.call_duration || 0) || 0,
+    call_recording:    p.call_recording || p.callrecording || p.recording_url || p.recording || p.recurl || '',
+    agent_duration:    parseInt(p.agent_duration || p.agentduration || 0) || 0,
+    raw_payload:       JSON.stringify(payload),
   };
 
   await db.query(`
     INSERT INTO calls
-      (call_id, status, customer_number, agent_number, caller_number, duration,
-       recording_url, start_time, end_time, call_type, dial_status, hangup_cause,
-       direction, raw_payload)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      (call_id, caller_number, called_number, agent_number, agent_name,
+       call_start_time, agent_answer_time, call_end_time, duration,
+       call_recording, agent_duration, raw_payload)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
     ON CONFLICT (call_id) DO UPDATE SET
-      status = EXCLUDED.status,
-      duration = CASE WHEN EXCLUDED.duration > 0 THEN EXCLUDED.duration ELSE calls.duration END,
-      recording_url = CASE WHEN EXCLUDED.recording_url != '' THEN EXCLUDED.recording_url ELSE calls.recording_url END,
-      end_time = CASE WHEN EXCLUDED.end_time != '' THEN EXCLUDED.end_time ELSE calls.end_time END,
-      dial_status = CASE WHEN EXCLUDED.dial_status != '' THEN EXCLUDED.dial_status ELSE calls.dial_status END,
-      hangup_cause = CASE WHEN EXCLUDED.hangup_cause != '' THEN EXCLUDED.hangup_cause ELSE calls.hangup_cause END,
-      raw_payload = EXCLUDED.raw_payload
+      caller_number     = COALESCE(NULLIF(EXCLUDED.caller_number,''), calls.caller_number),
+      called_number     = COALESCE(NULLIF(EXCLUDED.called_number,''), calls.called_number),
+      agent_number      = COALESCE(NULLIF(EXCLUDED.agent_number,''), calls.agent_number),
+      agent_name        = COALESCE(NULLIF(EXCLUDED.agent_name,''), calls.agent_name),
+      call_start_time   = COALESCE(NULLIF(EXCLUDED.call_start_time,''), calls.call_start_time),
+      agent_answer_time = COALESCE(NULLIF(EXCLUDED.agent_answer_time,''), calls.agent_answer_time),
+      call_end_time     = COALESCE(NULLIF(EXCLUDED.call_end_time,''), calls.call_end_time),
+      duration          = CASE WHEN EXCLUDED.duration > 0 THEN EXCLUDED.duration ELSE calls.duration END,
+      call_recording    = COALESCE(NULLIF(EXCLUDED.call_recording,''), calls.call_recording),
+      agent_duration    = CASE WHEN EXCLUDED.agent_duration > 0 THEN EXCLUDED.agent_duration ELSE calls.agent_duration END,
+      raw_payload       = EXCLUDED.raw_payload
   `, [
-    call.call_id, call.status, call.customer_number, call.agent_number, call.caller_number,
-    call.duration, call.recording_url, call.start_time, call.end_time, call.call_type,
-    call.dial_status, call.hangup_cause, call.direction, call.raw_payload,
+    call.call_id, call.caller_number, call.called_number, call.agent_number, call.agent_name,
+    call.call_start_time, call.agent_answer_time, call.call_end_time, call.duration,
+    call.call_recording, call.agent_duration, call.raw_payload,
   ]);
 
   res.json({ status: 'ok', call_id: call.call_id });

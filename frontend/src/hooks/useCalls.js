@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 // Empty string = same origin (Vercel production). Local dev uses the .env value.
 const API = import.meta.env.VITE_API_URL ?? '';
 
-export function useCalls({ status, search, limit = 100, offset = 0 } = {}) {
+export function useCalls({ search, limit = 100, offset = 0 } = {}) {
   const [calls, setCalls] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -14,7 +14,6 @@ export function useCalls({ status, search, limit = 100, offset = 0 } = {}) {
     setError(null);
     try {
       const params = new URLSearchParams({ limit, offset });
-      if (status) params.append('status', status);
       if (search) params.append('search', search);
 
       const res = await fetch(`${API}/api/calls?${params}`);
@@ -26,7 +25,7 @@ export function useCalls({ status, search, limit = 100, offset = 0 } = {}) {
     } finally {
       setLoading(false);
     }
-  }, [status, search, limit, offset]);
+  }, [search, limit, offset]);
 
   useEffect(() => {
     fetchCalls();

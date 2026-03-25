@@ -1,17 +1,12 @@
 export default function StatsBar({ stats }) {
   if (!stats) return null;
 
-  const statusMap = {};
-  (stats.byStatus || []).forEach(({ status, count }) => {
-    statusMap[status] = count;
-  });
-
   const cards = [
     { label: 'Total Calls', value: stats.total, color: 'text-blue-400' },
     { label: "Today's Calls", value: stats.today, color: 'text-emerald-400' },
-    { label: 'Completed', value: statusMap['completed'] || statusMap['ANSWER'] || 0, color: 'text-green-400' },
-    { label: 'Missed / Failed', value: (statusMap['missed'] || 0) + (statusMap['failed'] || 0) + (statusMap['NO ANSWER'] || 0), color: 'text-red-400' },
+    { label: 'With Recording', value: stats.recorded, color: 'text-green-400' },
     { label: 'Avg Duration', value: `${stats.avgDuration}s`, color: 'text-purple-400' },
+    { label: 'Avg Agent Talk', value: `${stats.avgAgentDuration}s`, color: 'text-yellow-400' },
   ];
 
   return (

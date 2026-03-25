@@ -7,22 +7,16 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const db = await initDb();
-  const { status, search, limit = '100', offset = '0' } = req.query;
+  const { search, limit = '100', offset = '0' } = req.query;
 
   let query = 'SELECT * FROM calls';
   const params = [];
-  const conditions = [];
 
-  if (status) {
-    conditions.push(`status = $${params.length + 1}`);
-    params.push(status);
-  }
   if (search) {
-    const idx = params.length;
-    conditions.push(`(customer_number ILIKE $${idx + 1} OR agent_number ILIKE $${idx + 2} OR call_id ILIKE $${idx + 3})`);
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    query += ` WHERE (called_number ILIKE $1 OR caller_number ILIKE $2 OR agent_name ILIKE $3 OR call_id ILIKE $4)`;
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
   }
-  if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
+
   query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
   params.push(Number(limit), Number(offset));
 
