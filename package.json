@@ -1,7 +1,0 @@
-{
-  "name": "admin-otr",
-  "version": "1.0.0",
-  "dependencies": {
-    "mongodb": "^7.1.1"
-  }
-}
