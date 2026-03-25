@@ -44,6 +44,45 @@ router.post('/', async (req, res) => {
   res.json({ status: 'ok', call_id: call.call_id });
 });
 
+// Recording-specific webhook — BuzzDial posts call_recording URL here after call ends
+router.post('/recording', async (req, res) => {
+  const payload = req.body;
+  console.log('[Recording webhook]', JSON.stringify(payload, null, 2));
+
+  const db = await getDb();
+  const p = Object.fromEntries(Object.entries(payload).map(([k, v]) => [k.toLowerCase(), v]));
+
+  const call_id = p.call_id || p.callid || p.uid || p.id;
+  const call_recording = p.call_recording || p.callrecording || p.recording_url || p.recording || p.recurl || p.file_url || p.audio_url || '';
+  const agent_duration = parseInt(p.agent_duration || p.agentduration || 0) || 0;
+
+  if (!call_id) {
+    console.warn('[Recording webhook] No call_id in payload, storing as new record');
+  }
+
+  try {
+    await db.collection('calls').insertOne({
+      call_id: call_id || `rec_${Date.now()}`,
+      call_recording,
+      agent_duration,
+      raw_payload: JSON.stringify(payload),
+      created_at: new Date(),
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      // Update existing call with recording
+      const updates = { raw_payload: JSON.stringify(payload) };
+      if (call_recording) updates.call_recording = call_recording;
+      if (agent_duration > 0) updates.agent_duration = agent_duration;
+      await db.collection('calls').updateOne({ call_id }, { $set: updates });
+    } else {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  res.json({ status: 'ok', call_id });
+});
+
 router.post('/test', async (req, res) => {
   const db = await getDb();
   const callId = `test_${Date.now()}`;
