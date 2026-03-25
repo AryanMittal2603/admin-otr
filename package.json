@@ -2,6 +2,6 @@
   "name": "admin-otr",
   "version": "1.0.0",
   "dependencies": {
-    "pg": "^8.13.3"
+    "mongodb": "^7.1.1"
   }
 }

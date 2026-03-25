@@ -1,85 +1,70 @@
 const express = require('express');
-const axios = require('axios');
-const db = require('../db');
+const { ObjectId } = require('mongodb');
+const { getDb } = require('../db');
 
 const router = express.Router();
 
-// GET all calls with optional filters
-router.get('/', (req, res) => {
-  const { status, search, limit = 100, offset = 0 } = req.query;
+router.get('/', async (req, res) => {
+  const db = await getDb();
+  const { search, limit = '100', offset = '0' } = req.query;
 
-  let query = 'SELECT * FROM calls';
-  const params = [];
-  const conditions = [];
+  const filter = search ? {
+    $or: [
+      { called_number: { $regex: search, $options: 'i' } },
+      { caller_number: { $regex: search, $options: 'i' } },
+      { agent_name: { $regex: search, $options: 'i' } },
+      { call_id: { $regex: search, $options: 'i' } },
+    ],
+  } : {};
 
-  if (status) {
-    conditions.push('status = ?');
-    params.push(status);
-  }
+  const [docs, total] = await Promise.all([
+    db.collection('calls').find(filter).sort({ created_at: -1 }).skip(Number(offset)).limit(Number(limit)).toArray(),
+    db.collection('calls').countDocuments(filter),
+  ]);
 
-  if (search) {
-    conditions.push('(customer_number LIKE ? OR agent_number LIKE ? OR call_id LIKE ?)');
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-  }
-
-  if (conditions.length > 0) {
-    query += ' WHERE ' + conditions.join(' AND ');
-  }
-
-  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-  params.push(Number(limit), Number(offset));
-
-  const calls = db.prepare(query).all(...params);
-  const total = db.prepare('SELECT COUNT(*) as count FROM calls').get().count;
-
+  const calls = docs.map(({ _id, ...doc }) => ({ id: _id.toString(), ...doc }));
   res.json({ calls, total });
 });
 
-// GET single call
-router.get('/:id', (req, res) => {
-  const call = db.prepare('SELECT * FROM calls WHERE id = ? OR call_id = ?').get(req.params.id, req.params.id);
-  if (!call) return res.status(404).json({ error: 'Call not found' });
-  res.json(call);
+router.get('/stats/summary', async (req, res) => {
+  const db = await getDb();
+  const col = db.collection('calls');
+  const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+
+  const [total, recorded, today, [agg]] = await Promise.all([
+    col.countDocuments(),
+    col.countDocuments({ call_recording: { $exists: true, $ne: '' } }),
+    col.countDocuments({ created_at: { $gte: startOfDay } }),
+    col.aggregate([{ $group: { _id: null, avgDuration: { $avg: '$duration' }, avgAgentDuration: { $avg: '$agent_duration' } } }]).toArray(),
+  ]);
+
+  res.json({ total, recorded, today, avgDuration: Math.round(agg?.avgDuration || 0), avgAgentDuration: Math.round(agg?.avgAgentDuration || 0) });
 });
 
-// POST initiate click-to-call
+router.get('/:id', async (req, res) => {
+  const db = await getDb();
+  const { id } = req.params;
+  const filter = ObjectId.isValid(id) ? { $or: [{ _id: new ObjectId(id) }, { call_id: id }] } : { call_id: id };
+  const doc = await db.collection('calls').findOne(filter);
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  const { _id, ...rest } = doc;
+  res.json({ id: _id.toString(), ...rest });
+});
+
 router.post('/initiate', async (req, res) => {
   const { customer_number, agent_number } = req.body;
-
-  if (!customer_number) {
-    return res.status(400).json({ error: 'customer_number is required' });
-  }
-
-  try {
-    const params = new URLSearchParams({
-      auth: process.env.BUZZDIAL_AUTH,
-      customer_number,
-    });
-    if (agent_number) params.append('agent_number', agent_number);
-
-    const response = await axios.get(
-      `https://buzzdial.io/api/clicktocall.php?${params.toString()}`
-    );
-    res.json(response.data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  if (!customer_number) return res.status(400).json({ error: 'customer_number is required' });
+  const params = new URLSearchParams({ auth: process.env.BUZZDIAL_AUTH, customer_number });
+  if (agent_number) params.append('agent_number', agent_number);
+  const response = await fetch(`https://buzzdial.io/api/clicktocall.php?${params}`);
+  res.json(await response.json());
 });
 
-// GET stats summary
-router.get('/stats/summary', (req, res) => {
-  const total = db.prepare('SELECT COUNT(*) as count FROM calls').get().count;
-  const byStatus = db.prepare('SELECT status, COUNT(*) as count FROM calls GROUP BY status').all();
-  const avgDuration = db.prepare('SELECT AVG(duration) as avg FROM calls WHERE duration > 0').get().avg;
-  const today = db.prepare("SELECT COUNT(*) as count FROM calls WHERE date(created_at) = date('now')").get().count;
-
-  res.json({ total, byStatus, avgDuration: Math.round(avgDuration || 0), today });
-});
-
-// DELETE a call record
-router.delete('/:id', (req, res) => {
-  const result = db.prepare('DELETE FROM calls WHERE id = ?').run(req.params.id);
-  if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
+router.delete('/:id', async (req, res) => {
+  const db = await getDb();
+  const { id } = req.params;
+  const result = await db.collection('calls').deleteOne({ _id: new ObjectId(id) });
+  if (result.deletedCount === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ success: true });
 });
 
