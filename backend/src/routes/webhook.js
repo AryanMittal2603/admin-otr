@@ -9,27 +9,31 @@ router.post('/', (req, res) => {
 
   console.log('[Webhook received]', JSON.stringify(payload, null, 2));
 
-  // Normalize fields from BuzzDial webhook payload
+  // Normalize keys to lowercase for case-insensitive matching
+  const p = Object.fromEntries(Object.entries(payload).map(([k, v]) => [k.toLowerCase(), v]));
+
   const call = {
-    call_id: payload.call_id || payload.callid || payload.uid || payload.id || `manual_${Date.now()}`,
-    status: payload.status || payload.call_status || payload.dial_status || 'unknown',
-    customer_number: payload.customer_number || payload.cust_number || payload.mobile || payload.customer || payload.to || '',
-    agent_number: payload.agent_number || payload.agent || payload.from || '',
-    caller_number: payload.caller_number || payload.caller || payload.from || '',
-    duration: parseInt(payload.duration || payload.call_duration || 0),
-    recording_url: payload.recording_url || payload.recording || payload.record_url || '',
-    start_time: payload.start_time || payload.starttime || payload.call_start || '',
-    end_time: payload.end_time || payload.endtime || payload.call_end || '',
-    call_type: payload.call_type || payload.type || '',
-    dial_status: payload.dial_status || payload.dialstatus || '',
-    hangup_cause: payload.hangup_cause || payload.hangup || '',
-    direction: payload.direction || 'outbound',
+    call_id: p.call_id || p.callid || p.uid || p.id || `manual_${Date.now()}`,
+    status: p.status || p.call_status || p.dial_status || 'unknown',
+    customer_number: p.customer_number || p.cust_number || p.mobile || p.customer || p.to || '',
+    agent_number: p.agent_number || p.agent || p.agentno || p.from || '',
+    caller_number: p.caller_number || p.caller || p.from || '',
+    duration: parseInt(p.duration || p.call_duration || p.callduration || 0) || 0,
+    recording_url: p.recording_url || p.recordingurl || p.recurl || p.rec_url
+                || p.recording || p.callrecording || p.call_recording
+                || p.recordingfile || p.audio_url || p.file_url || '',
+    start_time: p.start_time || p.starttime || p.call_start || p.callstart || '',
+    end_time: p.end_time || p.endtime || p.call_end || p.callend || '',
+    call_type: p.call_type || p.calltype || p.type || '',
+    dial_status: p.dial_status || p.dialstatus || p.callstatus || '',
+    hangup_cause: p.hangup_cause || p.hangup || p.hangupcause || '',
+    direction: p.direction || 'outbound',
     raw_payload: JSON.stringify(payload),
   };
 
   try {
     db.prepare(`
-      INSERT OR REPLACE INTO calls
+      INSERT INTO calls
         (call_id, status, customer_number, agent_number, caller_number, duration,
          recording_url, start_time, end_time, call_type, dial_status, hangup_cause,
          direction, raw_payload)
@@ -37,6 +41,14 @@ router.post('/', (req, res) => {
         (@call_id, @status, @customer_number, @agent_number, @caller_number, @duration,
          @recording_url, @start_time, @end_time, @call_type, @dial_status, @hangup_cause,
          @direction, @raw_payload)
+      ON CONFLICT(call_id) DO UPDATE SET
+        status = excluded.status,
+        duration = CASE WHEN excluded.duration > 0 THEN excluded.duration ELSE calls.duration END,
+        recording_url = CASE WHEN excluded.recording_url != '' THEN excluded.recording_url ELSE calls.recording_url END,
+        end_time = CASE WHEN excluded.end_time != '' THEN excluded.end_time ELSE calls.end_time END,
+        dial_status = CASE WHEN excluded.dial_status != '' THEN excluded.dial_status ELSE calls.dial_status END,
+        hangup_cause = CASE WHEN excluded.hangup_cause != '' THEN excluded.hangup_cause ELSE calls.hangup_cause END,
+        raw_payload = excluded.raw_payload
     `).run(call);
 
     res.json({ status: 'ok', call_id: call.call_id });
