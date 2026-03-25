@@ -1,0 +1,10 @@
+.claude/
+node_modules/
+frontend/node_modules/
+frontend/dist/
+backend/node_modules/
+backend/calls.db
+.env
+.env.local
+.env.*.local
+*.db
