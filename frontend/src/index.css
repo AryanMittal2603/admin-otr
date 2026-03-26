@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  background: #09090b;
 }
